@@ -1,13 +1,4 @@
 services:
-  backend:
-    image: frappe/erpnext:v15
-    deploy:
-      restart_policy:
-        condition: on-failure
-    volumes:
-      - sites:/home/frappe/frappe-bench/sites
-      - logs:/home/frappe/frappe-bench/logs
-
   configurator:
     image: frappe/erpnext:v15
     deploy:
@@ -16,7 +7,6 @@ services:
     entrypoint:
       - bash
       - -c
-    # add redis_socketio for backward compatibility
     command:
       - >
         ls -1 apps > sites/apps.txt;
@@ -32,6 +22,24 @@ services:
       REDIS_CACHE: redis-cache:6379
       REDIS_QUEUE: redis-queue:6379
       SOCKETIO_PORT: "9000"
+    depends_on:
+      - db
+      - redis-cache
+      - redis-queue
+    volumes:
+      - sites:/home/frappe/frappe-bench/sites
+      - logs:/home/frappe/frappe-bench/logs
+
+  backend:
+    image: frappe/erpnext:v15
+    deploy:
+      restart_policy:
+        condition: on-failure
+    depends_on:
+      - configurator
+      - db
+      - redis-cache
+      - redis-queue
     volumes:
       - sites:/home/frappe/frappe-bench/sites
       - logs:/home/frappe/frappe-bench/logs
@@ -41,6 +49,11 @@ services:
     deploy:
       restart_policy:
         condition: none
+    depends_on:
+      - configurator
+      - db
+      - redis-cache
+      - redis-queue
     volumes:
       - sites:/home/frappe/frappe-bench/sites
       - logs:/home/frappe/frappe-bench/logs
@@ -80,7 +93,7 @@ services:
       - --character-set-server=utf8mb4
       - --collation-server=utf8mb4_unicode_ci
       - --skip-character-set-client-handshake
-      - --skip-innodb-read-only-compressed # Temporary fix for MariaDB 10.6
+      - --skip-innodb-read-only-compressed
     environment:
       MYSQL_ROOT_PASSWORD: admin
     volumes:
@@ -89,6 +102,7 @@ services:
   frontend:
     image: frappe/erpnext:v15
     depends_on:
+      - backend
       - websocket
     deploy:
       restart_policy:
@@ -113,6 +127,10 @@ services:
     deploy:
       restart_policy:
         condition: on-failure
+    depends_on:
+      - configurator
+      - redis-queue
+      - redis-cache
     command:
       - bench
       - worker
@@ -127,6 +145,10 @@ services:
     deploy:
       restart_policy:
         condition: on-failure
+    depends_on:
+      - configurator
+      - redis-queue
+      - redis-cache
     command:
       - bench
       - worker
@@ -157,6 +179,10 @@ services:
     deploy:
       restart_policy:
         condition: on-failure
+    depends_on:
+      - configurator
+      - redis-queue
+      - redis-cache
     command:
       - bench
       - schedule
@@ -169,6 +195,10 @@ services:
     deploy:
       restart_policy:
         condition: on-failure
+    depends_on:
+      - configurator
+      - redis-queue
+      - redis-cache
     command:
       - node
       - /home/frappe/frappe-bench/apps/frappe/socketio.js
